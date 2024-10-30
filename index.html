@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athletics Timer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .timer {
+            font-size: 48px;
+            margin: 20px 0;
+        }
+
+        .buttons {
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        h2 {
+            margin-top: 20px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+    </style>
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
+            authDomain: "atheltics-f30e7.firebaseapp.com",
+            databaseURL: "https://atheltics-f30e7-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "atheltics-f30e7",
+            storageBucket: "atheltics-f30e7.appspot.com",
+            messagingSenderId: "185026923383",
+            appId: "1:185026923383:web:ef2fbe44977ada3aa96f72",
+            measurementId: "G-8STC1X6VWM"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let timerInterval = null;
+        let startTime = null;
+        let laps = [];
+
+        // Listen for changes in Firebase
+        const timerRef = ref(db, "timer");
+        onValue(timerRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                if (data.running) {
+                    startTime = data.startTime;
+                    if (!timerInterval) {
+                        timerInterval = setInterval(updateTimer, 10);
+                    }
+                } else {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                updateLapList(data.laps || []);
+            }
+        });
+
+        document.getElementById("startButton").onclick = startRace;
+        document.getElementById("stopButton").onclick = stopRace;
+        document.getElementById("recordLapButton").onclick = recordLap;
+
+        function startRace() {
+            if (!timerInterval) {
+                startTime = new Date().getTime();
+                set(timerRef, {
+                    startTime: startTime,
+                    running: true,
+                    laps: [] // Reset laps on start
+                });
+                timerInterval = setInterval(updateTimer, 10);
+                console.log("Race started at:", new Date(startTime)); // Log start time
+            }
+        }
+
+        function updateTimer() {
+            const now = new Date().getTime();
+            const elapsed = now - startTime;
+            const seconds = Math.floor((elapsed / 1000) % 60);
+            const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
+            const milliseconds = Math.floor((elapsed % 1000) / 10);
+            document.getElementById("timer").innerText =
+                `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
+        }
+
+        function stopRace() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+
+                // Update Firebase to stop the race
+                update(timerRef, { running: false })
+                    .then(() => {
+                        console.log("Race stopped successfully");
+                    })
+                    .catch((error) => {
+                        console.error("Error stopping race:", error); // Log error
+                    });
+            } else {
+                console.log("Timer is not running"); // Log if timer is not running
+            }
+        }
+
+        function recordLap() {
+            if (startTime) {
+                const now = new Date().getTime();
+                const lapTime = now - startTime; // Calculate lap time
+                laps.push(lapTime); // Add the current lap time to the laps array
+                console.log("Recording lap time:", lapTime); // Log the lap time
+
+                // Update the laps in Firebase
+                update(ref(db, "timer"), { laps: laps })
+                    .then(() => {
+                        console.log("Lap recorded successfully!"); // Log success
+                    })
+                    .catch((error) => {
+                        console.error("Error recording lap:", error); // Log error
+                    });
+            } else {
+                console.log("Start time is not set."); // Log if start time is not set
+            }
+        }
+
+        function updateLapList(laps) {
+            const lapList = document.getElementById("lapList");
+            lapList.innerHTML = '';
+            laps.forEach((lap, index) => {
+                lapList.innerHTML += `<li>Lap ${index + 1}: ${formatTime(lap)}</li>`;
+            });
+        }
+
+        function formatTime(time) {
+            const seconds = Math.floor((time / 1000) % 60);
+            const minutes = Math.floor((time / (1000 * 60)) % 60);
+            const milliseconds = Math.floor((time % 1000) / 10);
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Athletics Timer</h1>
+        <div id="timer" class="timer">00:00.00</div>
+        <div class="buttons">
+            <button id="startButton">Start Race</button>
+            <button id="stopButton">Stop Race</button>
+            <button id="recordLapButton">Record Lap</button>
+        </div>
+        <h2>Laps</h2>
+        <ul id="lapList"></ul>
+    </div>
+</body>
+</html>
