@@ -59,11 +59,9 @@
         }
     </style>
     <script type="module">
-        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
         import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
             authDomain: "atheltics-f30e7.firebaseapp.com",
@@ -75,30 +73,30 @@
             measurementId: "G-8STC1X6VWM"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
         let timerInterval = null;
         let startTime = null;
         let laps = [];
-        let timerStopped = false;
+        let isRunning = false;
 
-        // Listen for changes in Firebase
         const timerRef = ref(db, "timer");
         onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                if (data.running) {
-                    startTime = data.startTime;
-                    if (!timerInterval && !timerStopped) {
+                isRunning = data.running;
+                startTime = data.startTime;
+                laps = data.laps || [];
+                if (isRunning) {
+                    if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
                     }
                 } else {
                     clearInterval(timerInterval);
                     timerInterval = null;
                 }
-                updateLapList(data.laps || []);
+                updateLapList(laps);
             }
         });
 
@@ -107,24 +105,19 @@
         document.getElementById("recordLapButton").onclick = recordLap;
 
         function startRace() {
-            // Reset timerStopped flag to allow the timer to start
-            timerStopped = false;
-
-            if (!timerInterval) {
+            if (!isRunning) {
                 startTime = new Date().getTime();
                 set(timerRef, {
                     startTime: startTime,
                     running: true,
-                    laps: [] // Reset laps on start
+                    laps: []
                 });
                 timerInterval = setInterval(updateTimer, 10);
-                console.log("Race started at:", new Date(startTime));
+                isRunning = true;
             }
         }
 
         function updateTimer() {
-            if (timerStopped || !startTime) return;  // Exit if timer is stopped
-
             const now = new Date().getTime();
             const elapsed = now - startTime;
             const seconds = Math.floor((elapsed / 1000) % 60);
@@ -135,56 +128,36 @@
         }
 
         function stopRace() {
-            // Set timerStopped to true to prevent any further updates
-            timerStopped = true;
-
-            // Clear the timer interval immediately to stop updating the timer display
-            if (timerInterval) {
+            if (isRunning) {
                 clearInterval(timerInterval);
                 timerInterval = null;
+                isRunning = false;
+                update(timerRef, { running: false, startTime: null })
+                    .then(() => {
+                        console.log("Race stopped completely");
+                    })
+                    .catch((error) => {
+                        console.error("Error stopping race:", error);
+                    });
+            } else {
+                console.log("Timer is not running");
             }
-
-            // Calculate the stopped time and display it
-            const now = new Date().getTime();
-            const elapsed = now - startTime;
-            const seconds = Math.floor((elapsed / 1000) % 60);
-            const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
-            const milliseconds = Math.floor((elapsed % 1000) / 10);
-            document.getElementById("timer").innerText =
-                `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
-
-            // Update Firebase to mark the race as stopped
-            update(timerRef, { running: false })
-                .then(() => {
-                    console.log("Race stopped successfully");
-
-                    // Show an alert with the last lap time if laps were recorded
-                    if (laps.length > 0) {
-                        const lastLapTime = laps[laps.length - 1];
-                        alert("Last Lap Time: " + formatTime(lastLapTime));
-                    }
-                })
-                .catch((error) => {
-                    console.error("Error stopping race:", error);
-                });
         }
 
         function recordLap() {
-            if (startTime) {
+            if (isRunning) {
                 const now = new Date().getTime();
                 const lapTime = now - startTime;
                 laps.push(lapTime);
-                console.log("Recording lap time:", lapTime);
-
-                update(ref(db, "timer"), { laps: laps })
+                update(timerRef, { laps: laps })
                     .then(() => {
-                        console.log("Lap recorded successfully!");
+                        console.log("Lap recorded successfully");
                     })
                     .catch((error) => {
                         console.error("Error recording lap:", error);
                     });
             } else {
-                console.log("Start time is not set.");
+                console.log("Timer is not running.");
             }
         }
 
