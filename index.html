@@ -5,16 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Athletics Timer</title>
     <style>
+        /* Basic styling */
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
-            color: #333;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
         }
+
         .container {
             text-align: center;
             background: white;
@@ -22,13 +23,16 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
+
         .timer {
             font-size: 48px;
             margin: 20px 0;
         }
+
         .buttons {
             margin: 20px 0;
         }
+
         button {
             padding: 10px 20px;
             font-size: 16px;
@@ -40,12 +44,15 @@
             color: white;
             transition: background-color 0.3s;
         }
+
         button:hover {
             background-color: #0056b3;
         }
+
         h2 {
             margin-top: 20px;
         }
+
         ul {
             list-style: none;
             padding: 0;
@@ -70,34 +77,11 @@
         const db = getDatabase(app);
 
         let timerInterval = null;
+        let startTime = null;
         let laps = [];
         let isRunning = false;
-        let startTime = 0;
-        let deviceOffset = 0;
 
         const timerRef = ref(db, "timer");
-
-        async function syncTimeWithFirebase() {
-            // Store the client time before the request
-            const clientRequestTime = Date.now();
-
-            // Write server timestamp to Firebase
-            const offsetRef = ref(db, "timer/sync");
-            await set(offsetRef, serverTimestamp());
-
-            // Listen for server timestamp update
-            onValue(offsetRef, (snapshot) => {
-                const serverTimestamp = snapshot.val();
-                if (serverTimestamp) {
-                    const clientResponseTime = Date.now();
-                    const latency = (clientResponseTime - clientRequestTime) / 2;
-                    deviceOffset = (serverTimestamp + latency) - clientResponseTime;
-                }
-            });
-        }
-
-        syncTimeWithFirebase();
-
         onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -121,18 +105,20 @@
         document.getElementById("recordLapButton").onclick = recordLap;
 
         function startRace() {
-            startTime = Date.now() + deviceOffset;
-            set(timerRef, {
-                startTime: startTime,
-                running: true,
-                laps: []
-            });
-            timerInterval = setInterval(updateTimer, 10);
-            isRunning = true;
+            if (!isRunning) {
+                startTime = Date.now();
+                set(timerRef, {
+                    startTime: startTime,
+                    running: true,
+                    laps: []
+                });
+                timerInterval = setInterval(updateTimer, 10);
+                isRunning = true;
+            }
         }
 
         function updateTimer() {
-            const now = Date.now() + deviceOffset;
+            const now = Date.now();
             const elapsed = now - startTime;
             const seconds = Math.floor((elapsed / 1000) % 60);
             const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
@@ -146,46 +132,27 @@
                 clearInterval(timerInterval);
                 timerInterval = null;
                 isRunning = false;
-                update(timerRef, { running: false, startTime: null })
-                    .then(() => console.log("Race stopped completely"))
+                // Reset timer data in Firebase
+                update(timerRef, { running: false, startTime: null, laps: [] })
+                    .then(() => console.log("Race reset and stopped completely"))
                     .catch((error) => console.error("Error stopping race:", error));
             } else {
                 console.log("Timer is not running");
             }
         }
 
-       function recordLap() {
-    if (isRunning) {
-        const now = Date.now();
-        const lapTime = now - startTime; // Lap time relative to synchronized start time
-        laps.push(lapTime);
-        
-        update(timerRef, { laps: laps })  // Update laps in Firebase for all devices
-            .then(() => console.log("Lap recorded successfully"))
-            .catch((error) => console.error("Error recording lap:", error));
-    } else {
-        console.log("Timer is not running. Starting timer now...");
-
-        // If not running, fetch synchronized start time and reset laps
-        const newStartTime = Date.now();
-        
-        // Sync start time across all devices
-        set(timerRef, {
-            startTime: newStartTime,
-            running: true,
-            laps: []
-        })
-        .then(() => {
-            startTime = newStartTime;  // Set local startTime
-            laps = [];  // Clear laps locally
-            isRunning = true;  // Set running status
-            timerInterval = setInterval(updateTimer, 10);  // Start timer interval
-            console.log("Timer started from synchronized time.");
-        })
-        .catch((error) => console.error("Error starting synchronized timer:", error));
-    }
-}
-
+        function recordLap() {
+            if (isRunning) {
+                const now = Date.now();
+                const lapTime = now - startTime;
+                laps.push(lapTime);
+                update(timerRef, { laps: laps })
+                    .then(() => console.log("Lap recorded successfully"))
+                    .catch((error) => console.error("Error recording lap:", error));
+            } else {
+                console.log("Timer is not running.");
+            }
+        }
 
         function updateLapList(laps) {
             const lapList = document.getElementById("lapList");
