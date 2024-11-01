@@ -80,6 +80,7 @@
         let startTime = null;
         let laps = [];
         let isRunning = false;
+        let deviceOffset = 0;
 
         const timerRef = ref(db, "timer");
         onValue(timerRef, (snapshot) => {
@@ -88,6 +89,7 @@
                 isRunning = data.running;
                 startTime = data.startTime;
                 laps = data.laps || [];
+                deviceOffset = Date.now() - data.serverTime; // Calculate offset
                 if (isRunning) {
                     if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
@@ -106,9 +108,11 @@
 
         function startRace() {
             if (!isRunning) {
-                startTime = Date.now();
+                const serverTime = Date.now(); // Get the server time
+                startTime = serverTime; // Set start time to server time
                 set(timerRef, {
                     startTime: startTime,
+                    serverTime: serverTime,
                     running: true,
                     laps: []
                 });
@@ -119,7 +123,7 @@
 
         function updateTimer() {
             const now = Date.now();
-            const elapsed = now - startTime;
+            const elapsed = now - (startTime + deviceOffset); // Calculate elapsed based on server time
             const seconds = Math.floor((elapsed / 1000) % 60);
             const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
             const milliseconds = Math.floor((elapsed % 1000) / 10);
@@ -144,7 +148,7 @@
         function recordLap() {
             if (isRunning) {
                 const now = Date.now();
-                const lapTime = now - startTime;
+                const lapTime = now - (startTime + deviceOffset); // Calculate lap time based on server time
                 laps.push(lapTime);
                 update(timerRef, { laps: laps })
                     .then(() => console.log("Lap recorded successfully"))
