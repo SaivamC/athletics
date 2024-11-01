@@ -15,7 +15,6 @@
             height: 100vh;
             margin: 0;
         }
-
         .container {
             text-align: center;
             background: white;
@@ -23,16 +22,13 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-
         .timer {
             font-size: 48px;
             margin: 20px 0;
         }
-
         .buttons {
             margin: 20px 0;
         }
-
         button {
             padding: 10px 20px;
             font-size: 16px;
@@ -44,15 +40,12 @@
             color: white;
             transition: background-color 0.3s;
         }
-
         button:hover {
             background-color: #0056b3;
         }
-
         h2 {
             margin-top: 20px;
         }
-
         ul {
             list-style: none;
             padding: 0;
@@ -105,16 +98,14 @@
         document.getElementById("recordLapButton").onclick = recordLap;
 
         function startRace() {
-            if (!isRunning) {
-                startTime = new Date().getTime();
-                set(timerRef, {
-                    startTime: startTime,
-                    running: true,
-                    laps: []
-                });
-                timerInterval = setInterval(updateTimer, 10);
-                isRunning = true;
-            }
+            startTime = new Date().getTime();
+            set(timerRef, {
+                startTime: startTime,
+                running: true,
+                laps: []
+            });
+            timerInterval = setInterval(updateTimer, 10);
+            isRunning = true;
         }
 
         function updateTimer() {
@@ -133,12 +124,8 @@
                 timerInterval = null;
                 isRunning = false;
                 update(timerRef, { running: false, startTime: null })
-                    .then(() => {
-                        console.log("Race stopped completely");
-                    })
-                    .catch((error) => {
-                        console.error("Error stopping race:", error);
-                    });
+                    .then(() => console.log("Race stopped completely"))
+                    .catch((error) => console.error("Error stopping race:", error));
             } else {
                 console.log("Timer is not running");
             }
@@ -150,12 +137,8 @@
                 const lapTime = now - startTime;
                 laps.push(lapTime);
                 update(timerRef, { laps: laps })
-                    .then(() => {
-                        console.log("Lap recorded successfully");
-                    })
-                    .catch((error) => {
-                        console.error("Error recording lap:", error);
-                    });
+                    .then(() => console.log("Lap recorded successfully"))
+                    .catch((error) => console.error("Error recording lap:", error));
             } else {
                 console.log("Timer is not running.");
             }
