@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Athletics Timer</title>
     <style>
-        /* Basic styling */
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
@@ -60,8 +59,9 @@
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
             authDomain: "atheltics-f30e7.firebaseapp.com",
@@ -82,6 +82,7 @@
         let isRunning = false;
         let deviceOffset = 0;
 
+        // Realtime updates from Firebase
         const timerRef = ref(db, "timer");
         onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
@@ -89,7 +90,7 @@
                 isRunning = data.running;
                 startTime = data.startTime;
                 laps = data.laps || [];
-                deviceOffset = Date.now() - data.serverTime; // Calculate offset
+                deviceOffset = Date.now() - data.serverTime;
                 if (isRunning) {
                     if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
@@ -108,8 +109,8 @@
 
         function startRace() {
             if (!isRunning) {
-                const serverTime = Date.now(); // Get the server time
-                startTime = serverTime; // Set start time to server time
+                const serverTime = Date.now();
+                startTime = serverTime;
                 set(timerRef, {
                     startTime: startTime,
                     serverTime: serverTime,
@@ -123,7 +124,7 @@
 
         function updateTimer() {
             const now = Date.now();
-            const elapsed = now - (startTime + deviceOffset); // Calculate elapsed based on server time
+            const elapsed = now - (startTime + deviceOffset);
             const seconds = Math.floor((elapsed / 1000) % 60);
             const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
             const milliseconds = Math.floor((elapsed % 1000) / 10);
@@ -136,9 +137,8 @@
                 clearInterval(timerInterval);
                 timerInterval = null;
                 isRunning = false;
-                // Reset timer data in Firebase
                 update(timerRef, { running: false, startTime: null, laps: [] })
-                    .then(() => console.log("Race reset and stopped completely"))
+                    .then(() => console.log("Race stopped"))
                     .catch((error) => console.error("Error stopping race:", error));
             } else {
                 console.log("Timer is not running");
@@ -148,10 +148,10 @@
         function recordLap() {
             if (isRunning) {
                 const now = Date.now();
-                const lapTime = now - (startTime + deviceOffset); // Calculate lap time based on server time
+                const lapTime = now - (startTime + deviceOffset);
                 laps.push(lapTime);
                 update(timerRef, { laps: laps })
-                    .then(() => console.log("Lap recorded successfully"))
+                    .then(() => console.log("Lap recorded"))
                     .catch((error) => console.error("Error recording lap:", error));
             } else {
                 console.log("Timer is not running.");
@@ -172,6 +172,34 @@
             const milliseconds = Math.floor((time % 1000) / 10);
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
+
+        // Fetch Lap Times from Firebase
+        async function getLapTimes() {
+            try {
+                const lapRef = ref(db, "timer/laps");
+                const snapshot = await get(lapRef);
+                if (snapshot.exists()) {
+                    const laps = snapshot.val();
+                    console.log("Lap Times:", laps);
+                    updateLapList(laps);
+                } else {
+                    console.log("No laps recorded yet.");
+                }
+            } catch (error) {
+                console.error("Error fetching lap times:", error);
+            }
+        }
+
+        // Auto-click "Record Lap" button when IR sensor detects an object
+        const sensorRef = ref(db, "sensor/detect");
+        onValue(sensorRef, (snapshot) => {
+            if (snapshot.val() === true) {
+                console.log("IR sensor detected an object! Recording lap...");
+                document.getElementById("recordLapButton").click();
+                set(sensorRef, false); // Reset sensor state after detecting
+            }
+        });
+
     </script>
 </head>
 <body>
