@@ -170,19 +170,23 @@
         }
 
         function recordLap() {
-            if (isRunning) {
-                const displayedTime = document.getElementById("timer").innerText;
-                laps.push(displayedTime);
+    if (isRunning) {
+        const now = Date.now(); // Capture real-time timestamp
+        const elapsed = now - startTime; // Calculate exact lap time
+        const formattedTime = formatTime(elapsed);
 
-                update(timerRef, { laps: laps })
-                    .then(() => console.log("Lap recorded:", displayedTime))
-                    .catch((error) => console.error("Error recording lap:", error));
+        laps.push(formattedTime); // Store correctly formatted lap time
 
-                updateLapList(laps);
-            } else {
-                console.log("Timer is not running.");
-            }
-        }
+        update(timerRef, { laps: laps }) // Update Firebase
+            .then(() => console.log("Lap recorded:", formattedTime))
+            .catch((error) => console.error("Error recording lap:", error));
+
+        updateLapList(laps);
+    } else {
+        console.log("Timer is not running.");
+    }
+}
+
 
         function resetLaps() {
             laps = [];
