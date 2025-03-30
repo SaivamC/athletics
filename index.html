@@ -115,7 +115,7 @@
                     startTime: startTime,
                     serverTime: serverTime,
                     running: true,
-                    laps: []
+                    laps: laps // Preserve existing laps
                 });
                 timerInterval = setInterval(updateTimer, 10);
                 isRunning = true;
@@ -123,13 +123,10 @@
         }
 
         function updateTimer() {
+            if (!isRunning) return;
             const now = Date.now();
             const elapsed = now - (startTime + deviceOffset);
-            const seconds = Math.floor((elapsed / 1000) % 60);
-            const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
-            const milliseconds = Math.floor((elapsed % 1000) / 10);
-            document.getElementById("timer").innerText =
-                `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
+            document.getElementById("timer").innerText = formatTime(elapsed);
         }
 
         function stopRace() {
@@ -137,7 +134,7 @@
                 clearInterval(timerInterval);
                 timerInterval = null;
                 isRunning = false;
-                update(timerRef, { running: false, startTime: null, laps: [] })
+                update(timerRef, { running: false }) // Keep laps intact
                     .then(() => console.log("Race stopped"))
                     .catch((error) => console.error("Error stopping race:", error));
             } else {
@@ -146,25 +143,41 @@
         }
 
         function recordLap() {
-            if (isRunning) {
-                const now = Date.now();
-                const lapTime = now - (startTime + deviceOffset);
-                laps.push(lapTime);
-                update(timerRef, { laps: laps })
-                    .then(() => console.log("Lap recorded"))
-                    .catch((error) => console.error("Error recording lap:", error));
-            } else {
-                console.log("Timer is not running.");
-            }
-        }
+    if (isRunning) {
+        const now = Date.now();
+        const elapsedTime = now - (startTime + deviceOffset); // Total elapsed time
+        
+        // Calculate correct lap time (difference from last lap)
+        const lastLapTime = laps.length > 0 ? laps[laps.length - 1] : 0;
+        const lapTime = elapsedTime - lastLapTime; 
 
-        function updateLapList(laps) {
-            const lapList = document.getElementById("lapList");
-            lapList.innerHTML = '';
-            laps.forEach((lap, index) => {
-                lapList.innerHTML += `<li>Lap ${index + 1}: ${formatTime(lap)}</li>`;
-            });
-        }
+        laps.push(elapsedTime); // Store cumulative elapsed time in laps
+
+        update(timerRef, { laps: laps }) // Store correctly in Firebase
+            .then(() => console.log("Lap recorded:", formatTime(lapTime)))
+            .catch((error) => console.error("Error recording lap:", error));
+
+        updateLapList(laps);
+    } else {
+        console.log("Timer is not running.");
+    }
+}
+
+
+
+function updateLapList(laps) {
+    const lapList = document.getElementById("lapList");
+    lapList.innerHTML = '';
+
+    let lastLapTime = 0;
+    laps.forEach((lap, index) => {
+        let lapTime = lap - lastLapTime; // Convert to interval
+        lastLapTime = lap;
+
+        lapList.innerHTML += `<li>Lap ${index + 1}: ${formatTime(lapTime)}</li>`;
+    });
+}
+
 
         function formatTime(time) {
             const seconds = Math.floor((time / 1000) % 60);
@@ -195,7 +208,7 @@
         onValue(sensorRef, (snapshot) => {
             if (snapshot.val() === true) {
                 console.log("IR sensor detected an object! Recording lap...");
-                document.getElementById("recordLapButton").click();
+                recordLap(); // Call function directly instead of button click
                 set(sensorRef, false); // Reset sensor state after detecting
             }
         });
@@ -207,7 +220,7 @@
         <h1>Athletics Timer</h1>
         <div id="timer" class="timer">00:00.00</div>
         <div class="buttons">
-            <button id="startButton">start Race</button>
+            <button id="startButton">Start Race</button>
             <button id="stopButton">Stop Race</button>
             <button id="recordLapButton">Record Lap</button>
         </div>
