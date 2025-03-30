@@ -57,10 +57,26 @@
             padding: 0;
         }
     </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Athletics Timer</h1>
+        <div id="timer" class="timer">00:00.00</div>
+        <div class="buttons">
+            <button id="startButton">Start Race</button>
+            <button id="stopButton">Stop Race</button>
+            <button id="recordLapButton">Record Lap</button>
+            <button id="resetLapsButton">Reset Laps</button>
+        </div>
+        <h2>Laps</h2>
+        <ul id="lapList"></ul>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
         import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
             authDomain: "atheltics-f30e7.firebaseapp.com",
@@ -72,23 +88,28 @@
             measurementId: "G-8STC1X6VWM"
         };
 
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
+        // Firebase References
+        const timerRef = ref(db, "timer");
+        const triggerLapRef = ref(db, "/triggerLap");
+
+        // Timer variables
         let timerInterval = null;
         let startTime = null;
         let laps = [];
         let isRunning = false;
-        let lastLapTime = 0;
 
-        const timerRef = ref(db, "timer");
+        // Firebase listener for timer updates
         onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 isRunning = data.running;
                 startTime = data.startTime;
                 laps = data.laps || [];
-                lastLapTime = data.lastLapTime || 0;
+
                 if (isRunning) {
                     if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
@@ -101,21 +122,31 @@
             }
         });
 
-        document.getElementById("startButton").onclick = startRace;
-        document.getElementById("stopButton").onclick = stopRace;
-        document.getElementById("recordLapButton").onclick = recordLap;
-        document.getElementById("resetLapsButton").onclick = resetLaps;
+        // Listen for ESP8266 lap trigger
+        onValue(triggerLapRef, (snapshot) => {
+            const trigger = snapshot.val();
+            if (trigger) {
+                console.log("Lap triggered from ESP8266");
+                recordLap();
+                set(triggerLapRef, false); // Reset trigger after processing
+            }
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("startButton").onclick = startRace;
+            document.getElementById("stopButton").onclick = stopRace;
+            document.getElementById("recordLapButton").onclick = recordLap;
+            document.getElementById("resetLapsButton").onclick = resetLaps;
+        });
 
         function startRace() {
             if (!isRunning) {
                 const serverTime = Date.now();
                 startTime = serverTime;
-                lastLapTime = 0;
                 set(timerRef, {
                     startTime: startTime,
                     running: true,
-                    laps: [],
-                    lastLapTime: lastLapTime
+                    laps: []
                 });
                 timerInterval = setInterval(updateTimer, 10);
                 isRunning = true;
@@ -139,63 +170,47 @@
         }
 
         function recordLap() {
-    if (isRunning) {
-        const displayedTime = document.getElementById("timer").innerText; // Fetch directly from timer
-        laps.push(displayedTime); // Store the exact displayed time
+            if (isRunning) {
+                const displayedTime = document.getElementById("timer").innerText;
+                laps.push(displayedTime);
 
-        update(timerRef, { laps: laps }) // Update Firebase
-            .then(() => console.log("Lap recorded:", displayedTime))
-            .catch((error) => console.error("Error recording lap:", error));
+                update(timerRef, { laps: laps })
+                    .then(() => console.log("Lap recorded:", displayedTime))
+                    .catch((error) => console.error("Error recording lap:", error));
 
-        updateLapList(laps);
-    } else {
-        console.log("Timer is not running.");
-    }
-}
+                updateLapList(laps);
+            } else {
+                console.log("Timer is not running.");
+            }
+        }
 
-function resetLaps() {
-    laps = [];
-    update(timerRef, { laps: [] }) // Reset in Firebase
-        .then(() => console.log("Laps reset"))
-        .catch((error) => console.error("Error resetting laps:", error));
+        function resetLaps() {
+            laps = [];
+            update(timerRef, { laps: [] })
+                .then(() => console.log("Laps reset"))
+                .catch((error) => console.error("Error resetting laps:", error));
 
-    updateLapList(laps);
-}
+            updateLapList(laps);
+        }
 
-function updateLapList(laps) {
-    const lapList = document.getElementById("lapList");
-    lapList.innerHTML = ''; // Clear the list
+        function updateLapList(laps) {
+            const lapList = document.getElementById("lapList");
+            lapList.innerHTML = ''; // Clear the list
 
-    laps.forEach((lap, index) => {
-        lapList.innerHTML += `<li>Lap ${index + 1}: ${lap}</li>`; // Display directly stored lap times
-    });
-}
+            laps.forEach((lap, index) => {
+                lapList.innerHTML += `<li>Lap ${index + 1}: ${lap}</li>`;
+            });
+        }
 
+        function formatTime(time) {
+            if (isNaN(time) || time < 0) return "00:00.00";
 
-function formatTime(time) {
-    if (isNaN(time) || time < 0) return "00:00.00"; // Prevent NaN issues
+            const minutes = Math.floor(time / 60000);
+            const seconds = Math.floor((time % 60000) / 1000);
+            const milliseconds = Math.floor((time % 1000) / 10);
 
-    const minutes = Math.floor(time / 60000);
-    const seconds = Math.floor((time % 60000) / 1000);
-    const milliseconds = Math.floor((time % 1000) / 10);
-
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
-}
-
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
+        }
     </script>
-</head>
-<body>
-    <div class="container">
-        <h1>Athletics Timer</h1>
-        <div id="timer" class="timer">00:00.00</div>
-        <div class="buttons">
-            <button id="startButton">Start Race</button>
-            <button id="stopButton">Stop Race</button>
-            <button id="recordLapButton">Record Lap</button>
-            <button id="resetLapsButton">Reset Laps</button>
-        </div>
-        <h2>Laps</h2>
-        <ul id="lapList"></ul>
-    </div>
 </body>
 </html>
