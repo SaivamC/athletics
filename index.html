@@ -74,7 +74,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-        import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+        import { getDatabase, ref, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
     
         // Firebase Configuration
         const firebaseConfig = {
@@ -96,18 +96,16 @@
         const timerRef = ref(db, "timer");
         const lapRef = ref(db, "laps");
     
-        // Timer variables
         let timerInterval = null;
         let startTime = null;
         let isRunning = false;
     
-        // Firebase Listener: Synchronize Start Time
+        // Listen for changes in Firebase
         onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 startTime = data.startTime;
                 isRunning = data.running;
-    
                 if (isRunning) {
                     if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
@@ -119,24 +117,21 @@
             }
         });
     
-        // Firebase Listener: Synchronize Laps
         onValue(lapRef, (snapshot) => {
-            const laps = snapshot.val() || [];
-            updateLapList(laps);
+            updateLapList(snapshot.val() || []);
         });
     
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("startButton").onclick = startRace;
             document.getElementById("stopButton").onclick = stopRace;
             document.getElementById("recordLapButton").onclick = recordLap;
-            document.getElementById("resetLapsButton").onclick = resetLaps;
+            document.getElementById("resetTimerButton").onclick = resetTimer;
         });
     
         function startRace() {
             if (!isRunning) {
-                const serverTime = Date.now();  // Get global timestamp
+                const serverTime = Date.now();
                 startTime = serverTime;
-    
                 set(timerRef, { startTime: startTime, running: true });
                 timerInterval = setInterval(updateTimer, 10);
                 isRunning = true;
@@ -159,22 +154,22 @@
     
         function recordLap() {
             if (!isRunning) return;
-    
             const now = Date.now();
-            update(lapRef, { [now]: now - startTime })  // Store timestamp and lap time
-                .then(() => console.log("Lap recorded:", formatTime(now - startTime)))
-                .catch((error) => console.error("Error recording lap:", error));
+            update(lapRef, { [now]: now - startTime });
         }
     
-        function resetLaps() {
-            set(lapRef, {});
+        function resetTimer() {
+            clearInterval(timerInterval);
+            set(timerRef, { startTime: null, running: false });
+            remove(lapRef);
+            document.getElementById("timer").innerText = "00:00.00";
             updateLapList([]);
+            isRunning = false;
         }
     
         function updateLapList(laps) {
             const lapList = document.getElementById("lapList");
-            lapList.innerHTML = ''; 
-    
+            lapList.innerHTML = '';
             Object.entries(laps).forEach(([timestamp, lapTime], index) => {
                 lapList.innerHTML += `<li>Lap ${index + 1}: ${formatTime(lapTime)}</li>`;
             });
@@ -182,14 +177,13 @@
     
         function formatTime(time) {
             if (isNaN(time) || time < 0) return "00:00.00";
-    
             const minutes = Math.floor(time / 60000);
             const seconds = Math.floor((time % 60000) / 1000);
             const milliseconds = Math.floor((time % 1000) / 10);
-    
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
     </script>
+    
     
 </body>
 </html>
