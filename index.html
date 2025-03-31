@@ -115,6 +115,9 @@
                     clearInterval(timerInterval);
                     timerInterval = null;
                 }
+            } else {
+                document.getElementById("timer").innerText = "00:00.00";
+                isRunning = false;
             }
         });
     
@@ -181,6 +184,7 @@
             document.getElementById("timer").innerText = "00:00.00";
             updateLapList([]);
             isRunning = false;
+            setTimeout(() => location.reload(), 500); // Ensure all devices sync
         }
     
         function updateLapList(laps) {
@@ -203,8 +207,6 @@
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
     </script>
-    
-    
     
 </body>
 </html>
