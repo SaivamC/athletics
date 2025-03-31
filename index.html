@@ -152,15 +152,15 @@
         }
     
         function stopRace() {
-            if (isRunning) {
-                clearInterval(timerInterval);
-                update(timerRef, { running: false }).then(() => {
-                    console.log("Timer Stopped");
-                    isRunning = false;
-                });
-            }
-        }
-    
+    if (isRunning) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        set(timerRef, { startTime, running: false }).then(() => {
+            console.log("Timer Stopped and Synced");
+            isRunning = false;
+        });
+    }
+}
         function recordLap() {
             if (!isRunning) return;
             const now = Date.now();
@@ -170,22 +170,24 @@
         }
     
         function resetTimer() {
-            clearInterval(timerInterval);
-            set(timerRef, { startTime: null, running: false }).then(() => {
-                console.log("Timer Reset");
-                document.getElementById("timer").innerText = "00:00.00";
-                isRunning = false;
-            });
-        }
-    
-        function clearStoredData() {
-            remove(timerRef).then(() => console.log("Timer data cleared"));
-            remove(lapRef).then(() => console.log("Lap data cleared"));
-            document.getElementById("timer").innerText = "00:00.00";
-            updateLapList([]);
-            isRunning = false;
-            setTimeout(() => location.reload(), 500); // Ensure all devices sync
-        }
+    clearInterval(timerInterval);
+    timerInterval = null;
+    set(timerRef, { startTime: null, running: false }).then(() => {
+        console.log("Timer Reset");
+        document.getElementById("timer").innerText = "00:00.00";
+        isRunning = false;
+        setTimeout(() => location.reload(), 500); // Ensure all devices sync
+    });
+}
+
+function clearStoredData() {
+    remove(timerRef).then(() => console.log("Timer data cleared"));
+    remove(lapRef).then(() => console.log("Lap data cleared"));
+    document.getElementById("timer").innerText = "00:00.00";
+    updateLapList([]);
+    isRunning = false;
+    setTimeout(() => location.reload(), 500); // Ensure all devices sync
+}
     
         function updateLapList(laps) {
             const lapList = document.getElementById("lapList");
