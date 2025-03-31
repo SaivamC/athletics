@@ -105,6 +105,7 @@
             if (data) {
                 startTime = data.startTime;
                 isRunning = data.running;
+                console.log("Firebase Updated: ", data);
                 if (isRunning) {
                     if (!timerInterval) {
                         timerInterval = setInterval(updateTimer, 10);
@@ -130,10 +131,12 @@
         function startRace() {
             if (!isRunning) {
                 const serverTime = Date.now();
-                startTime = serverTime;
-                set(timerRef, { startTime: startTime, running: true });
-                timerInterval = setInterval(updateTimer, 10);
-                isRunning = true;
+                set(timerRef, { startTime: serverTime, running: true }).then(() => {
+                    console.log("Timer Started: ", serverTime);
+                    startTime = serverTime;
+                    timerInterval = setInterval(updateTimer, 10);
+                    isRunning = true;
+                });
             }
         }
     
@@ -146,24 +149,30 @@
         function stopRace() {
             if (isRunning) {
                 clearInterval(timerInterval);
-                update(timerRef, { running: false });
-                isRunning = false;
+                update(timerRef, { running: false }).then(() => {
+                    console.log("Timer Stopped");
+                    isRunning = false;
+                });
             }
         }
     
         function recordLap() {
             if (!isRunning) return;
             const now = Date.now();
-            update(lapRef, { [now]: now - startTime });
+            update(lapRef, { [now]: now - startTime }).then(() => {
+                console.log("Lap Recorded: ", now - startTime);
+            });
         }
     
         function resetTimer() {
             clearInterval(timerInterval);
-            set(timerRef, { startTime: null, running: false });
-            remove(lapRef);
-            document.getElementById("timer").innerText = "00:00.00";
-            updateLapList([]);
-            isRunning = false;
+            set(timerRef, { startTime: null, running: false }).then(() => {
+                console.log("Timer Reset");
+                remove(lapRef);
+                document.getElementById("timer").innerText = "00:00.00";
+                updateLapList([]);
+                isRunning = false;
+            });
         }
     
         function updateLapList(laps) {
@@ -186,6 +195,7 @@
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
     </script>
+    
     
 </body>
 </html>
