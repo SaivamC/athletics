@@ -169,8 +169,12 @@
         function updateLapList(laps) {
             const lapList = document.getElementById("lapList");
             lapList.innerHTML = '';
-            Object.entries(laps).forEach(([timestamp, lapTime], index) => {
-                lapList.innerHTML += `<li>Lap ${index + 1}: ${formatTime(lapTime)}</li>`;
+            const maxLaps = 5; // Limit visible laps to prevent overflow
+            const lapEntries = Object.entries(laps).slice(-maxLaps);
+            lapEntries.forEach(([timestamp, lapTime], index) => {
+                const li = document.createElement("li");
+                li.innerText = `Lap ${index + 1}: ${formatTime(lapTime)}`;
+                lapList.appendChild(li);
             });
         }
     
@@ -182,7 +186,6 @@
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
     </script>
-    
     
 </body>
 </html>
