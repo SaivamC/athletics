@@ -67,6 +67,7 @@
             <button id="stopButton">Stop Race</button>
             <button id="recordLapButton">Record Lap</button>
             <button id="resetLapsButton">Reset Laps</button>
+            <button id="clearDataButton">Reset All Data</button>
         </div>
         <h2>Laps</h2>
         <ul id="lapList"></ul>
@@ -126,6 +127,7 @@
             document.getElementById("stopButton").onclick = stopRace;
             document.getElementById("recordLapButton").onclick = recordLap;
             document.getElementById("resetTimerButton").onclick = resetTimer;
+            document.getElementById("clearDataButton").onclick = clearStoredData;
         });
     
         function startRace() {
@@ -168,11 +170,17 @@
             clearInterval(timerInterval);
             set(timerRef, { startTime: null, running: false }).then(() => {
                 console.log("Timer Reset");
-                remove(lapRef);
                 document.getElementById("timer").innerText = "00:00.00";
-                updateLapList([]);
                 isRunning = false;
             });
+        }
+    
+        function clearStoredData() {
+            remove(timerRef).then(() => console.log("Timer data cleared"));
+            remove(lapRef).then(() => console.log("Lap data cleared"));
+            document.getElementById("timer").innerText = "00:00.00";
+            updateLapList([]);
+            isRunning = false;
         }
     
         function updateLapList(laps) {
@@ -195,6 +203,7 @@
             return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
     </script>
+    
     
     
 </body>
