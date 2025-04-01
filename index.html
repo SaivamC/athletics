@@ -46,7 +46,6 @@
         function updateTimer() {
             if (!isRunning || !serverStartTime) return;
             
-            // Calculate time based on server start time and local clock
             const now = Date.now();
             const elapsed = now - localStartTime + (serverStartTime - lastSyncTime);
             document.getElementById("timer").innerText = formatTime(elapsed);
@@ -55,7 +54,6 @@
         // Start Timer
         function startRace() {
             if (!isRunning) {
-                // Use server timestamp for synchronization
                 set(timerRef, { 
                     startTime: serverTimestamp(), 
                     running: true 
@@ -97,7 +95,8 @@
 
         // Reset Laps
         function resetLaps() {
-            remove(lapRef);
+            remove(lapRef).then(() => console.log("Laps reset"))
+                         .catch(error => console.error("Error resetting laps:", error));
         }
 
         // Clear All Data
@@ -107,99 +106,120 @@
             document.getElementById("timer").innerText = "00:00.00";
             isRunning = false;
             clearInterval(timerInterval);
+            console.log("All data cleared");
         }
 
         // Update Lap List in UI
         function updateLapList(laps) {
             const lapList = document.getElementById("lapsList");
-            lapList.innerHTML = !laps ? '<li class="text-white/70">No laps recorded yet</li>' : '';
-
-            if (laps) {
-                // Convert laps object to array and sort by timestamp
-                const lapsArray = Object.entries(laps).map(([key, value]) => ({
-                    id: key,
-                    ...value
-                })).sort((a, b) => a.timestamp - b.timestamp);
-                
-                // Display last 10 laps
-                lapsArray.slice(-10).forEach((lap, index) => {
-                    const li = document.createElement("li");
-                    li.className = "text-white";
-                    li.innerText = `Lap ${index + 1}: ${lap.time}`;
-                    lapList.appendChild(li);
-                });
+            lapList.innerHTML = '';
+            
+            if (!laps) {
+                lapList.innerHTML = '<li class="text-white/70">No laps recorded yet</li>';
+                return;
             }
+
+            // Convert to array and sort by timestamp
+            const lapsArray = Object.entries(laps)
+                .map(([key, value]) => ({
+                    id: key,
+                    time: value.time || value, // Handle both formats
+                    timestamp: value.timestamp || parseInt(key) // Fallback to key as timestamp
+                }))
+                .sort((a, b) => a.timestamp - b.timestamp);
+            
+            // Display last 10 laps
+            lapsArray.slice(-10).forEach((lap, index) => {
+                const li = document.createElement("li");
+                li.className = "text-white py-1 border-b border-white/10";
+                li.textContent = `Lap ${index + 1}: ${lap.time}`;
+                lapList.appendChild(li);
+            });
         }
 
-        // Listen for Timer Changes in Firebase
-        onValue(timerRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                if (data.running && data.startTime) {
-                    // Use server time for synchronization
-                    serverStartTime = data.startTime;
-                    localStartTime = Date.now();
-                    lastSyncTime = data.startTime;
-                    
-                    if (!isRunning) {
-                        isRunning = true;
+        // Initialize the application
+        function initApp() {
+            // Set up button event listeners
+            document.getElementById("startButton").addEventListener("click", startRace);
+            document.getElementById("stopButton").addEventListener("click", stopRace);
+            document.getElementById("recordLapButton").addEventListener("click", recordLap);
+            document.getElementById("resetLapsButton").addEventListener("click", resetLaps);
+            document.getElementById("clearDataButton").addEventListener("click", clearStoredData);
+
+            // Set up Firebase listeners
+            onValue(timerRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    if (data.running && data.startTime) {
+                        serverStartTime = data.startTime;
+                        localStartTime = Date.now();
+                        lastSyncTime = data.startTime;
+                        
+                        if (!isRunning) {
+                            isRunning = true;
+                            clearInterval(timerInterval);
+                            timerInterval = setInterval(updateTimer, 10);
+                        }
+                    } else {
                         clearInterval(timerInterval);
-                        timerInterval = setInterval(updateTimer, 10);
+                        isRunning = false;
+                        if (data.finalTime) {
+                            document.getElementById("timer").textContent = data.finalTime;
+                        }
                     }
                 } else {
-                    // Timer stopped
-                    clearInterval(timerInterval);
+                    document.getElementById("timer").textContent = "00:00.00";
                     isRunning = false;
-                    if (data.finalTime) {
-                        document.getElementById("timer").innerText = data.finalTime;
-                    }
+                    clearInterval(timerInterval);
                 }
-            } else {
-                // No timer data
-                document.getElementById("timer").innerText = "00:00.00";
-                isRunning = false;
-                clearInterval(timerInterval);
-            }
-        });
+            });
 
-        // Listen for Lap Changes in Firebase
-        onValue(lapRef, (snapshot) => {
-            updateLapList(snapshot.val());
-        });
+            onValue(lapRef, (snapshot) => {
+                updateLapList(snapshot.val());
+            });
 
-        // Attach Event Listeners
-        document.addEventListener("DOMContentLoaded", () => {
-            document.getElementById("startButton").onclick = startRace;
-            document.getElementById("stopButton").onclick = stopRace;
-            document.getElementById("recordLapButton").onclick = recordLap;
-            document.getElementById("resetLapsButton").onclick = resetLaps;
-            document.getElementById("clearDataButton").onclick = clearStoredData;
-        });
+            onValue(triggerLapRef, (snapshot) => {
+                if (snapshot.val() === true && isRunning) {
+                    recordLap();
+                    set(triggerLapRef, false);
+                }
+            });
+        }
 
-        // Listen for ESP8266 Lap Trigger
-        onValue(triggerLapRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data === true) {
-                recordLap();
-                set(triggerLapRef, false);
-            }
-        });
+        // Initialize when DOM is loaded
+        document.addEventListener("DOMContentLoaded", initApp);
     </script>
+    <style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        button {
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
     <div class="glass-card p-8 rounded-3xl shadow-2xl max-w-md w-full">
         <h1 class="text-4xl font-bold text-white mb-6 text-center">Athletics Timer</h1>
         <div id="timer" class="text-6xl font-mono text-white mb-8 text-center">00:00.00</div>
         <div class="grid grid-cols-2 gap-4 mb-8">
-            <button id="startButton" class="bg-green-500 text-white py-3 px-6 rounded-xl">Start Race</button>
-            <button id="stopButton" class="bg-red-500 text-white py-3 px-6 rounded-xl">Stop Race</button>
-            <button id="recordLapButton" class="bg-blue-500 text-white py-3 px-6 rounded-xl">Record Lap</button>
-            <button id="resetLapsButton" class="bg-purple-500 text-white py-3 px-6 rounded-xl">Reset Laps</button>
-            <button id="clearDataButton" class="bg-gray-500 text-white py-3 px-6 rounded-xl">Clear Data</button>
+            <button id="startButton" class="bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded-xl">Start Race</button>
+            <button id="stopButton" class="bg-red-500 hover:bg-red-600 text-white py-3 px-6 rounded-xl">Stop Race</button>
+            <button id="recordLapButton" class="bg-blue-500 hover:bg-blue-600 text-white py-3 px-6 rounded-xl">Record Lap</button>
+            <button id="resetLapsButton" class="bg-purple-500 hover:bg-purple-600 text-white py-3 px-6 rounded-xl">Reset Laps</button>
+            <button id="clearDataButton" class="bg-gray-500 hover:bg-gray-600 text-white py-3 px-6 rounded-xl">Clear Data</button>
         </div>
         <div class="bg-white/10 p-4 rounded-2xl">
             <h2 class="text-xl text-white font-semibold mb-3">Laps</h2>
-            <ul id="lapsList" class="text-white"></ul>
+            <ul id="lapsList" class="text-white max-h-60 overflow-y-auto">
+                <li class="text-white/70 py-1">No laps recorded yet</li>
+            </ul>
         </div>
     </div>
 </body>
