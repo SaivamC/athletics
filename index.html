@@ -6,144 +6,149 @@
     <title>Athletics Timer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-       import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-import { getDatabase, ref, onValue, set, push, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set, push, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-// Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
-    authDomain: "atheltics-f30e7.firebaseapp.com",
-    databaseURL: "https://atheltics-f30e7-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "atheltics-f30e7",
-    storageBucket: "atheltics-f30e7.appspot.com",
-    messagingSenderId: "185026923383",
-    appId: "1:185026923383:web:ef2fbe44977ada3aa96f72",
-    measurementId: "G-8STC1X6VWM"
-};
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
+            authDomain: "atheltics-f30e7.firebaseapp.com",
+            databaseURL: "https://atheltics-f30e7-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "atheltics-f30e7",
+            storageBucket: "atheltics-f30e7.appspot.com",
+            messagingSenderId: "185026923383",
+            appId: "1:185026923383:web:ef2fbe44977ada3aa96f72",
+            measurementId: "G-8STC1X6VWM"
+        };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const timerRef = ref(db, "timer"); // Reference to timer data in Firebase
-const lapRef = ref(db, "laps");   // Reference to lap data in Firebase
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const timerRef = ref(db, "timer"); // Timer data in Firebase
+        const lapRef = ref(db, "laps");   // Lap data in Firebase
+        const triggerLapRef = ref(db, "triggerLap"); // ESP8266 trigger reference
 
-let timerInterval = null; // Stores the interval for updating the timer
-let startTime = null;      // Stores the timestamp when the timer was started
-let isRunning = false;     // Flag to track if the timer is running
+        let timerInterval = null;
+        let startTime = null;
+        let isRunning = false;
 
-// Function to format elapsed time into MM:SS:MS
-function formatTime(time) {
-    const minutes = Math.floor(time / 60000);
-    const seconds = Math.floor((time % 60000) / 1000);
-    const milliseconds = Math.floor((time % 1000) / 10);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
-}
-
-// Function to update the timer display using the elapsed time
-function updateTimer() {
-    if (!isRunning || !startTime) return;
-    const elapsed = Date.now() - startTime; // Calculates elapsed time from startTime
-    document.getElementById("timer").innerText = formatTime(elapsed); // Updates UI
-}
-
-// Function to start the race timer
-function startRace() {
-    if (!isRunning) {
-        startTime = Date.now(); // Capture current timestamp as start time
-        set(timerRef, { startTime, running: true }); // Store start time in Firebase
-        clearInterval(timerInterval);
-        timerInterval = setInterval(updateTimer, 10); // Start updating the timer display
-        isRunning = true;
-    }
-}
-
-// Function to stop the race timer
-function stopRace() {
-    if (isRunning) {
-        clearInterval(timerInterval); // Stop updating the timer display
-        timerInterval = null;
-        isRunning = false;
-
-        // Calculate and store the final elapsed time
-        const displayedTime = document.getElementById("timer").innerText;
-
-        set(timerRef, { running: false, finalTime: displayedTime }) // Store final timer value
-            .then(() => console.log("Timer stopped at:", displayedTime))
-            .catch((error) => console.error("Error stopping timer:", error));
-    }
-}
-
-
-// Function to record a lap using the displayed timer value
-function recordLap() {
-    if (!isRunning) return; // Only record if the timer is running
-
-    const displayedTime = document.getElementById("timer").innerText; // Get time from UI
-
-    push(lapRef, displayedTime) // Store exactly what’s displayed
-        .then(() => console.log("Lap recorded:", displayedTime))
-        .catch((error) => console.error("Error recording lap:", error));
-}
-
-
-// Function to reset all lap records
-function resetLaps() {
-    remove(lapRef); // Remove lap data from Firebase
-}
-
-// Function to clear timer and lap data
-function clearStoredData() {
-    remove(timerRef); // Clear timer data from Firebase
-    remove(lapRef);  // Clear lap data from Firebase
-    document.getElementById("timer").innerText = "00:00.00"; // Reset UI display
-    isRunning = false;
-}
-
-// Function to update the lap list in UI with last 5 lap times
-function updateLapList(laps) {
-    const lapList = document.getElementById("lapsList");
-    lapList.innerHTML = Object.keys(laps).length ? "" : '<li class="text-white/70">No laps recorded yet</li>';
-
-    Object.values(laps).slice(-5).forEach((lapTime, index) => {
-        const li = document.createElement("li");
-        li.className = "text-white";
-        li.innerText = `Lap ${index + 1}: ${lapTime}`; // Directly use stored lap time
-        lapList.appendChild(li);
-    });
-}
-
-
-// Listen for changes in timer data from Firebase
-onValue(timerRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-        startTime = data.startTime; // Fetch stored start time from Firebase
-        isRunning = data.running;   // Fetch running state from Firebase
-        
-        if (isRunning) {
-            clearInterval(timerInterval);
-            timerInterval = setInterval(updateTimer, 10); // Resume timer if running
-        } else {
-            clearInterval(timerInterval);
+        // Format time (MM:SS:MS)
+        function formatTime(time) {
+            const minutes = Math.floor(time / 60000);
+            const seconds = Math.floor((time % 60000) / 1000);
+            const milliseconds = Math.floor((time % 1000) / 10);
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
-    } else {
-        document.getElementById("timer").innerText = "00:00.00"; // Reset display if no data
-    }
-});
 
-// Listen for lap data changes from Firebase
-onValue(lapRef, (snapshot) => {
-    updateLapList(snapshot.val() || {}); // Update UI lap list with Firebase data
-});
+        // Update Timer Display
+        function updateTimer() {
+            if (!isRunning || !startTime) return;
+            const elapsed = Date.now() - startTime;
+            document.getElementById("timer").innerText = formatTime(elapsed);
+        }
 
-// Attach event listeners when the document is loaded
-document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("startButton").onclick = startRace;
-    document.getElementById("stopButton").onclick = stopRace;
-    document.getElementById("recordLapButton").onclick = recordLap;
-    document.getElementById("resetLapsButton").onclick = resetLaps;
-    document.getElementById("clearDataButton").onclick = clearStoredData;
-});
+        // Start Timer
+        function startRace() {
+            if (!isRunning) {
+                startTime = Date.now();
+                set(timerRef, { startTime, running: true });
+                clearInterval(timerInterval);
+                timerInterval = setInterval(updateTimer, 10);
+                isRunning = true;
+            }
+        }
+
+        // Stop Timer
+        function stopRace() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                isRunning = false;
+
+                const displayedTime = document.getElementById("timer").innerText;
+
+                set(timerRef, { running: false, finalTime: displayedTime })
+                    .then(() => console.log("Timer stopped at:", displayedTime))
+                    .catch((error) => console.error("Error stopping timer:", error));
+            }
+        }
+
+        // Record Lap
+        function recordLap() {
+            if (!isRunning) return;
+            const displayedTime = document.getElementById("timer").innerText;
+
+            push(lapRef, displayedTime)
+                .then(() => console.log("Lap recorded:", displayedTime))
+                .catch((error) => console.error("Error recording lap:", error));
+        }
+
+        // Reset Laps
+        function resetLaps() {
+            remove(lapRef);
+        }
+
+        // Clear All Data
+        function clearStoredData() {
+            remove(timerRef);
+            remove(lapRef);
+            document.getElementById("timer").innerText = "00:00.00";
+            isRunning = false;
+        }
+
+        // Update Lap List in UI
+        function updateLapList(laps) {
+            const lapList = document.getElementById("lapsList");
+            lapList.innerHTML = Object.keys(laps).length ? "" : '<li class="text-white/70">No laps recorded yet</li>';
+
+            Object.values(laps).slice(-5).forEach((lapTime, index) => {
+                const li = document.createElement("li");
+                li.className = "text-white";
+                li.innerText = `Lap ${index + 1}: ${lapTime}`;
+                lapList.appendChild(li);
+            });
+        }
+
+        // Listen for Timer Changes in Firebase
+        onValue(timerRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                startTime = data.startTime;
+                isRunning = data.running;
+
+                if (isRunning) {
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(updateTimer, 10);
+                } else {
+                    clearInterval(timerInterval);
+                }
+            } else {
+                document.getElementById("timer").innerText = "00:00.00";
+            }
+        });
+
+        // Listen for Lap Changes in Firebase
+        onValue(lapRef, (snapshot) => {
+            updateLapList(snapshot.val() || {});
+        });
+
+        // Attach Event Listeners
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("startButton").onclick = startRace;
+            document.getElementById("stopButton").onclick = stopRace;
+            document.getElementById("recordLapButton").onclick = recordLap;
+            document.getElementById("resetLapsButton").onclick = resetLaps;
+            document.getElementById("clearDataButton").onclick = clearStoredData;
+        });
+
+        // Listen for ESP8266 Lap Trigger
+        onValue(triggerLapRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data === true) {
+                document.getElementById("recordLapButton").click(); // Simulate Lap Button Click
+                set(triggerLapRef, false); // Reset Trigger
+            }
+        });
 
     </script>
 </head>
