@@ -178,12 +178,17 @@
                 updateLapList(snapshot.val());
             });
 
-            onValue(triggerLapRef, (snapshot) => {
-                if (snapshot.val() === true && isRunning) {
-                    recordLap();
-                    set(triggerLapRef, false);
-                }
-            });
+            let lastLapTime = 0;
+
+onValue(triggerLapRef, (snapshot) => {
+    const currentTime = Date.now();
+    if (snapshot.val() === true && isRunning && (currentTime - lastLapTime) > 800) { // 800ms cooldown
+        recordLap();
+        set(triggerLapRef, false);
+        lastLapTime = currentTime;
+    }
+});
+
         }
 
         // Initialize when DOM is loaded
