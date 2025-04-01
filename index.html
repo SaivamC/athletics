@@ -121,8 +121,8 @@
                     ...value
                 })).sort((a, b) => a.timestamp - b.timestamp);
                 
-                // Display last 5 laps
-                lapsArray.slice(-5).forEach((lap, index) => {
+                // Display last 10 laps
+                lapsArray.slice(-10).forEach((lap, index) => {
                     const li = document.createElement("li");
                     li.className = "text-white";
                     li.innerText = `Lap ${index + 1}: ${lap.time}`;
