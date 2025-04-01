@@ -60,11 +60,15 @@
             }
         }
 
-        function recordLap() {
-            if (!isRunning) return;
-            const lapTime = Date.now() - startTime;
-            push(lapRef, lapTime);
-        }
+      function recordLap() {
+    if (!isRunning) return;
+
+    const displayedTime = document.getElementById("timer").innerText; // Get formatted time
+    push(lapRef, displayedTime) // Store exact displayed time in Firebase
+        .then(() => console.log("Lap recorded:", displayedTime))
+        .catch((error) => console.error("Error recording lap:", error));
+}
+
 
         function resetLaps() {
             remove(lapRef);
