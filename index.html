@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Athletics Timer</title>
-    <!-- Tailwind CSS CDN -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
@@ -39,17 +39,20 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4 mb-8">
-            <button id="startBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500">
+            <button id="startButton" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500">
                 Start Race
             </button>
-            <button id="stopBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-500">
+            <button id="stopButton" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-500">
                 Stop Race
             </button>
-            <button id="lapBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500">
+            <button id="recordLapButton" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500">
                 Record Lap
             </button>
-            <button id="resetBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500">
+            <button id="resetLapsButton" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500">
                 Reset Laps
+            </button>
+            <button id="clearDataButton" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500">
+                Clear Data
             </button>
         </div>
 
@@ -61,7 +64,11 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        // Firebase Configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
             authDomain: "atheltics-f30e7.firebaseapp.com",
@@ -74,104 +81,112 @@
         };
 
         // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const timerRef = ref(db, "timer");
+        const lapRef = ref(db, "laps");
 
-        let isRunning = false;
-        let startTime = null;
         let timerInterval = null;
-        let laps = [];
+        let startTime = null;
+        let isRunning = false;
 
-        // DOM Elements
-        const timerElement = document.getElementById('timer');
-        const lapsList = document.getElementById('lapsList');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const lapBtn = document.getElementById('lapBtn');
-        const resetBtn = document.getElementById('resetBtn');
+        // Listen for timer updates
+        onValue(timerRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                startTime = data.startTime;
+                isRunning = data.running;
+                if (isRunning) {
+                    if (!timerInterval) timerInterval = setInterval(updateTimer, 10);
+                } else {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+            } else {
+                document.getElementById("timer").innerText = "00:00.00";
+                isRunning = false;
+            }
+        });
 
-        function formatTime(time) {
-            if (isNaN(time) || time < 0) return '00:00.00';
-            const minutes = Math.floor(time / 60000);
-            const seconds = Math.floor((time % 60000) / 1000);
-            const milliseconds = Math.floor((time % 1000) / 10);
-            return ${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds};
+        // Listen for lap updates
+        onValue(lapRef, (snapshot) => {
+            updateLapList(snapshot.val() || []);
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("startButton").onclick = startRace;
+            document.getElementById("stopButton").onclick = stopRace;
+            document.getElementById("recordLapButton").onclick = recordLap;
+            document.getElementById("resetLapsButton").onclick = resetLaps;
+            document.getElementById("clearDataButton").onclick = clearStoredData;
+        });
+
+        function startRace() {
+            if (!isRunning) {
+                const serverTime = Date.now();
+                set(timerRef, { startTime: serverTime, running: true });
+                startTime = serverTime;
+                timerInterval = setInterval(updateTimer, 10);
+                isRunning = true;
+            }
         }
 
         function updateTimer() {
-            if (!startTime) return;
-            const now = Date.now();
-            const elapsed = now - startTime;
-            timerElement.textContent = formatTime(elapsed);
+            if (!isRunning || !startTime) return;
+            const elapsed = Date.now() - startTime;
+            document.getElementById("timer").innerText = formatTime(elapsed);
+        }
+
+        function stopRace() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                set(timerRef, { startTime, running: false });
+                isRunning = false;
+            }
         }
 
         function recordLap() {
-            if (isRunning && startTime) {
-                const now = Date.now();
-                const elapsed = now - startTime;
-                const formattedTime = formatTime(elapsed);
-                laps.push(formattedTime);
-                firebase.database().ref('timer').update({ laps });
-                updateLapsList();
-            }
+            if (!isRunning) return;
+            const now = Date.now();
+            const lapTime = now - startTime;
+
+            onValue(lapRef, (snapshot) => {
+                let laps = snapshot.val() || [];
+                laps.push(lapTime);
+                set(lapRef, laps);
+            }, { onlyOnce: true });
         }
 
-        function updateLapsList() {
-            lapsList.innerHTML = laps.length === 0 
-                ? '<li class="text-white/70">No laps recorded yet</li>'
-                : laps.map((lap, index) => `
-                    <li class="text-white bg-white/5 p-2 rounded-lg animate_animated animate_fadeIn">
-                        Lap ${index + 1}: ${lap}
-                    </li>
-                `).join('');
+        function resetLaps() {
+            set(lapRef, []).then(() => updateLapList([]));
         }
 
-        // Firebase Listeners
-        firebase.database().ref('timer').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                isRunning = data.running;
-                startTime = data.startTime;
-                laps = data.laps || [];
-                updateLapsList();
-            }
-        });
+        function clearStoredData() {
+            remove(timerRef);
+            remove(lapRef);
+            document.getElementById("timer").innerText = "00:00.00";
+            updateLapList([]);
+            isRunning = false;
+        }
 
-        firebase.database().ref('triggerLap').on('value', (snapshot) => {
-            if (snapshot.val()) {
-                recordLap();
-                firebase.database().ref('triggerLap').set(false);
-            }
-        });
+        function updateLapList(laps) {
+            const lapList = document.getElementById("lapsList");
+            lapList.innerHTML = laps.length ? "" : '<li class="text-white/70">No laps recorded yet</li>';
+            laps.slice(-5).forEach((lapTime, index) => {
+                const li = document.createElement("li");
+                li.className = "text-white";
+                li.innerText = `Lap ${index + 1}: ${formatTime(lapTime)}`;
+                lapList.appendChild(li);
+            });
+        }
 
-        // Event Listeners
-        startBtn.addEventListener('click', () => {
-            if (!isRunning) {
-                const serverTime = Date.now();
-                startTime = serverTime;
-                firebase.database().ref('timer').set({
-                    startTime: serverTime,
-                    running: true,
-                    laps: []
-                });
-                timerInterval = setInterval(updateTimer, 10);
-            }
-        });
-
-        stopBtn.addEventListener('click', () => {
-            if (isRunning) {
-                clearInterval(timerInterval);
-                firebase.database().ref('timer').update({ running: false });
-            }
-        });
-
-        lapBtn.addEventListener('click', recordLap);
-
-        resetBtn.addEventListener('click', () => {
-            laps = [];
-            firebase.database().ref('timer').update({ laps });
-            updateLapsList();
-        });
+        function formatTime(time) {
+            const minutes = Math.floor(time / 60000);
+            const seconds = Math.floor((time % 60000) / 1000);
+            const milliseconds = Math.floor((time % 1000) / 10);
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
+        }
     </script>
 </body>
 </html>
