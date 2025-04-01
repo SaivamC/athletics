@@ -4,64 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Athletics Timer</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
-    <!-- Animate.css for simple animations -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-    <style>
-        .glass-card {
-            backdrop-filter: blur(12px);
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .gradient-btn {
-            transition: transform 0.2s, background 0.3s;
-        }
-        .gradient-btn:hover {
-            transform: scale(1.05);
-        }
-        .gradient-btn:active {
-            transform: scale(0.95);
-        }
-    </style>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
-    <div class="glass-card p-8 rounded-3xl shadow-2xl max-w-md w-full">
-        <h1 class="text-4xl font-bold text-white mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Athletics Timer
-        </h1>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set, push, remove } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
 
-        <div id="timer" class="text-6xl font-mono text-white mb-8 text-center bg-white/10 p-6 rounded-2xl backdrop-blur-sm">
-            00:00.00
-        </div>
-
-        <div class="grid grid-cols-2 gap-4 mb-8">
-            <button id="startBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500">
-                Start Race
-            </button>
-            <button id="stopBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-red-500 to-rose-500">
-                Stop Race
-            </button>
-            <button id="lapBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500">
-                Record Lap
-            </button>
-            <button id="resetBtn" class="gradient-btn text-white py-3 px-6 rounded-xl bg-gradient-to-r from-purple-500 to-pink-500">
-                Reset Laps
-            </button>
-        </div>
-
-        <div class="bg-white/10 p-4 rounded-2xl backdrop-blur-sm">
-            <h2 class="text-xl text-white font-semibold mb-3">Laps</h2>
-            <ul id="lapsList" class="space-y-2 max-h-40 overflow-y-auto">
-                <li class="text-white/70">No laps recorded yet</li>
-            </ul>
-        </div>
-    </div>
-
-    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyCbPN3RlAijcdtwb1Itj71nTYvm4kwN9tk",
             authDomain: "atheltics-f30e7.firebaseapp.com",
@@ -73,105 +20,118 @@
             measurementId: "G-8STC1X6VWM"
         };
 
-        // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const timerRef = ref(db, "timer");
+        const lapRef = ref(db, "laps");
 
-        let isRunning = false;
-        let startTime = null;
         let timerInterval = null;
-        let laps = [];
-
-        // DOM Elements
-        const timerElement = document.getElementById('timer');
-        const lapsList = document.getElementById('lapsList');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const lapBtn = document.getElementById('lapBtn');
-        const resetBtn = document.getElementById('resetBtn');
+        let startTime = null;
+        let isRunning = false;
 
         function formatTime(time) {
-            if (isNaN(time) || time < 0) return '00:00.00';
             const minutes = Math.floor(time / 60000);
             const seconds = Math.floor((time % 60000) / 1000);
             const milliseconds = Math.floor((time % 1000) / 10);
-            return ${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds};
+            return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}.${milliseconds < 10 ? '0' : ''}${milliseconds}`;
         }
 
         function updateTimer() {
-            if (!startTime) return;
-            const now = Date.now();
-            const elapsed = now - startTime;
-            timerElement.textContent = formatTime(elapsed);
+            if (!isRunning || !startTime) return;
+            const elapsed = Date.now() - startTime;
+            document.getElementById("timer").innerText = formatTime(elapsed);
+        }
+
+        function startRace() {
+            if (!isRunning) {
+                startTime = Date.now();
+                set(timerRef, { startTime, running: true });
+                clearInterval(timerInterval);
+                timerInterval = setInterval(updateTimer, 10);
+                isRunning = true;
+            }
+        }
+
+        function stopRace() {
+            if (isRunning) {
+                clearInterval(timerInterval);
+                set(timerRef, { startTime, running: false });
+                isRunning = false;
+            }
         }
 
         function recordLap() {
-            if (isRunning && startTime) {
-                const now = Date.now();
-                const elapsed = now - startTime;
-                const formattedTime = formatTime(elapsed);
-                laps.push(formattedTime);
-                firebase.database().ref('timer').update({ laps });
-                updateLapsList();
-            }
+            if (!isRunning) return;
+            const lapTime = Date.now() - startTime;
+            push(lapRef, lapTime);
         }
 
-        function updateLapsList() {
-            lapsList.innerHTML = laps.length === 0 
-                ? '<li class="text-white/70">No laps recorded yet</li>'
-                : laps.map((lap, index) => `
-                    <li class="text-white bg-white/5 p-2 rounded-lg animate_animated animate_fadeIn">
-                        Lap ${index + 1}: ${lap}
-                    </li>
-                `).join('');
+        function resetLaps() {
+            remove(lapRef);
         }
 
-        // Firebase Listeners
-        firebase.database().ref('timer').on('value', (snapshot) => {
+        function clearStoredData() {
+            remove(timerRef);
+            remove(lapRef);
+            document.getElementById("timer").innerText = "00:00.00";
+            isRunning = false;
+        }
+
+        function updateLapList(laps) {
+            const lapList = document.getElementById("lapsList");
+            lapList.innerHTML = laps.length ? "" : '<li class="text-white/70">No laps recorded yet</li>';
+            Object.values(laps).slice(-5).forEach((lapTime, index) => {
+                const li = document.createElement("li");
+                li.className = "text-white";
+                li.innerText = `Lap ${index + 1}: ${formatTime(lapTime)}`;
+                lapList.appendChild(li);
+            });
+        }
+
+        onValue(timerRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                isRunning = data.running;
                 startTime = data.startTime;
-                laps = data.laps || [];
-                updateLapsList();
+                isRunning = data.running;
+                if (isRunning) {
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(updateTimer, 10);
+                } else {
+                    clearInterval(timerInterval);
+                }
+            } else {
+                document.getElementById("timer").innerText = "00:00.00";
             }
         });
 
-        firebase.database().ref('triggerLap').on('value', (snapshot) => {
-            if (snapshot.val()) {
-                recordLap();
-                firebase.database().ref('triggerLap').set(false);
-            }
+        onValue(lapRef, (snapshot) => {
+            updateLapList(snapshot.val() || {});
         });
 
-        // Event Listeners
-        startBtn.addEventListener('click', () => {
-            if (!isRunning) {
-                const serverTime = Date.now();
-                startTime = serverTime;
-                firebase.database().ref('timer').set({
-                    startTime: serverTime,
-                    running: true,
-                    laps: []
-                });
-                timerInterval = setInterval(updateTimer, 10);
-            }
-        });
-
-        stopBtn.addEventListener('click', () => {
-            if (isRunning) {
-                clearInterval(timerInterval);
-                firebase.database().ref('timer').update({ running: false });
-            }
-        });
-
-        lapBtn.addEventListener('click', recordLap);
-
-        resetBtn.addEventListener('click', () => {
-            laps = [];
-            firebase.database().ref('timer').update({ laps });
-            updateLapsList();
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("startButton").onclick = startRace;
+            document.getElementById("stopButton").onclick = stopRace;
+            document.getElementById("recordLapButton").onclick = recordLap;
+            document.getElementById("resetLapsButton").onclick = resetLaps;
+            document.getElementById("clearDataButton").onclick = clearStoredData;
         });
     </script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4">
+    <div class="glass-card p-8 rounded-3xl shadow-2xl max-w-md w-full">
+        <h1 class="text-4xl font-bold text-white mb-6 text-center">Athletics Timer</h1>
+        <div id="timer" class="text-6xl font-mono text-white mb-8 text-center">00:00.00</div>
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <button id="startButton" class="bg-green-500 text-white py-3 px-6 rounded-xl">Start Race</button>
+            <button id="stopButton" class="bg-red-500 text-white py-3 px-6 rounded-xl">Stop Race</button>
+            <button id="recordLapButton" class="bg-blue-500 text-white py-3 px-6 rounded-xl">Record Lap</button>
+            <button id="resetLapsButton" class="bg-purple-500 text-white py-3 px-6 rounded-xl">Reset Laps</button>
+            <button id="clearDataButton" class="bg-gray-500 text-white py-3 px-6 rounded-xl">Clear Data</button>
+        </div>
+        <div class="bg-white/10 p-4 rounded-2xl">
+            <h2 class="text-xl text-white font-semibold mb-3">Laps</h2>
+            <ul id="lapsList" class="text-white"></ul>
+        </div>
+    </div>
 </body>
 </html>
